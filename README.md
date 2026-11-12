@@ -33,8 +33,11 @@ Ethernet5    spine2              Ethernet0       02:00:9c:ae:c2:00  8
 
 ## Results
 
-All numbers come from GitHub Actions (`ubuntu-24.04`, AMD EPYC 7763); see the job summaries of
-the [CI runs](https://github.com/yasaswinivardhireddy-png/nanonos/actions/workflows/ci.yml).
+All numbers come from GitHub Actions `ubuntu-24.04` runners and are re-measured on every push; see
+the job summaries of the [CI runs](https://github.com/yasaswinivardhireddy-png/nanonos/actions/workflows/ci.yml).
+GitHub-hosted runners differ in CPU model, so absolute numbers vary between runs, and the tables show
+conservative figures. The data-plane table is from an AMD EPYC 7763 runner; on an AMD EPYC 9V45
+runner the same benchmark measured 12.6 Mpps routed and 25.3 Mpps bridged.
 
 **Leaf-spine fabric** (`scripts/test_clos.sh`: 4 `nanonosd` processes, 2 hosts, veth links)
 
