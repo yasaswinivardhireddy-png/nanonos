@@ -44,11 +44,8 @@ const char* RouteStateName(RouteState state) {
   return "?";
 }
 
-Orchagent::Orchagent(sai::SwitchApi* sai, const Clock* clock)
-    : sai_(sai),
-      clock_(clock),
-      port_admin_(sai->GetPortCount(), false),
-      port_oper_(sai->GetPortCount(), true) {
+Orchagent::Orchagent(sai::SwitchApi* sai)
+    : sai_(sai), port_admin_(sai->GetPortCount(), false), port_oper_(sai->GetPortCount(), true) {
   for (uint16_t i = 0; i < sai->GetPortCount(); ++i) {
     port_names_.push_back("Ethernet" + std::to_string(i));
   }

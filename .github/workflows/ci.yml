@@ -42,7 +42,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
           -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
           -DNANONOS_WERROR=ON -DNANONOS_SANITIZE=${{ matrix.sanitize }}
-      - run: cmake --build build
+      - run: cmake --build build -- -k 0
       - name: Unit tests
         run: ctest --test-dir build --output-on-failure
 
@@ -62,7 +62,7 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
           -DCMAKE_TOOLCHAIN_FILE=cmake/${{ matrix.arch }}.cmake
           -DNANONOS_BUILD_BENCH=OFF -DNANONOS_WERROR=ON
-      - run: cmake --build build
+      - run: cmake --build build -- -k 0
       - name: Unit tests (emulated)
         run: ctest --test-dir build --output-on-failure
       - name: Show target binaries

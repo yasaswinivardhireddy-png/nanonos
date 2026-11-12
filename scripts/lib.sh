@@ -27,6 +27,13 @@ fail() {
 }
 
 dump_logs() {
+  for sock in "$RUN"/*.sock; do
+    [ -e "$sock" ] || continue
+    echo "===== $(basename "$sock" .sock): bgp summary, routes, drops"
+    "$NOSCTL_BIN" -s "$sock" show bgp summary || true
+    "$NOSCTL_BIN" -s "$sock" show ip route || true
+    "$NOSCTL_BIN" -s "$sock" show drops || true
+  done
   for f in "$RUN"/*.log; do
     [ -e "$f" ] || continue
     echo "===== $f (last 60 lines)"

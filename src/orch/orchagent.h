@@ -57,7 +57,7 @@ struct RouteInfo {
 
 class Orchagent {
  public:
-  Orchagent(sai::SwitchApi* sai, const Clock* clock);
+  explicit Orchagent(sai::SwitchApi* sai);
 
   bool Apply(const SwitchConfig& config, std::vector<std::string>* errors);
 
@@ -129,7 +129,6 @@ class Orchagent {
   void Error(std::vector<std::string>* errors, std::string message) const;
 
   sai::SwitchApi* sai_;
-  const Clock* clock_;
   SwitchConfig config_;
   MacAddress switch_mac_;
   std::vector<bool> port_admin_;

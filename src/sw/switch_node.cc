@@ -47,7 +47,7 @@ SwitchNode::SwitchNode(Platform platform)
     recorder_ = std::make_unique<sai::RecordingSwitchApi>(&asic_, platform_.sai_record);
     api = recorder_.get();
   }
-  orch_ = std::make_unique<Orchagent>(api, platform_.clock);
+  orch_ = std::make_unique<Orchagent>(api);
   asic_.SetTxHandler(platform_.transmit);
   asic_.SetCpuHandler([this](const CpuPacket& p) { OnCpuPacket(p); });
   started_ = platform_.clock->Now();

@@ -82,9 +82,17 @@ bool TcpTransport::Listen(std::string* error) {
   }
   const int one = 1;
   setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+  bool gtsm = false;
   for (const auto& [addr, n] : neighbors_) {
     // MD5 keys must be on the listening socket before the peer's SYN arrives.
     if (!n.password.empty()) ApplySecurity(listen_fd_, addr, true);
+    gtsm |= n.ttl_security_hops > 0;
+  }
+  if (gtsm) {
+    // The kernel answers a SYN with the listening socket's TTL. A GTSM peer
+    // drops any segment below TTL 255, so the SYN-ACK must leave with 255 too.
+    const int ttl = 255;
+    setsockopt(listen_fd_, IPPROTO_IP, IP_TTL, &ttl, sizeof(ttl));
   }
   const sockaddr_in any = Endpoint(INADDR_ANY, port_);
   if (bind(listen_fd_, reinterpret_cast<const sockaddr*>(&any), sizeof(any)) != 0 ||
@@ -163,8 +171,9 @@ void TcpTransport::OnEvent(bgp::ConnId id, uint32_t events) {
       return;
     }
     it->second.connecting = false;
-    const bool pending = it->second.out.size() > it->second.out_offset;
-    loop_->Modify(it->second.fd, EPOLLIN | (pending ? EPOLLOUT : 0));
+    uint32_t want = EPOLLIN;
+    if (it->second.out.size() > it->second.out_offset) want |= EPOLLOUT;
+    loop_->Modify(it->second.fd, want);
     if (handler_ != nullptr) handler_->OnConnected(id);
     return;
   }
