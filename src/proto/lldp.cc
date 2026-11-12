@@ -39,7 +39,8 @@ class Writer {
       return;
     }
     StoreBe16(out_.data() + pos_, static_cast<uint16_t>((type << 9) | value.size()));
-    std::memcpy(out_.data() + pos_ + 2, value.data(), value.size());
+    // memcpy from a null pointer is undefined even for 0 bytes (the End TLV).
+    if (!value.empty()) std::memcpy(out_.data() + pos_ + 2, value.data(), value.size());
     pos_ += 2 + value.size();
   }
   void TlvWithSubtype(uint8_t type, uint8_t subtype, std::string_view text) {

@@ -320,7 +320,9 @@ TEST(FabricSimTest, ConvergesForwardsAcrossBothSpinesAndFailsOver) {
   f.SetLink(Fabric::kLeaf1Id, 4, Fabric::kSpine1Id, 0, true);
   f.Run(4 * kUsPerSec);
   for (const RouteInfo& r : f.node(Fabric::kLeaf1Id).orch().Routes()) {
-    if (r.prefix == Pfx("10.2.2.0/24")) EXPECT_EQ(r.next_hops.size(), 2u);
+    if (r.prefix == Pfx("10.2.2.0/24")) {
+      EXPECT_EQ(r.next_hops.size(), 2u);
+    }
   }
   EXPECT_EQ(SendFlows(f, 0, 1, 200, 3000), 200u);
   EXPECT_EQ(SendFlows(f, 1, 0, 200, 3000), 200u);

@@ -89,7 +89,7 @@ jobs:
             mkdir -p corpus/$f
             ./build/fuzz_$f -max_total_time=60 -print_final_stats=1 corpus/$f 2> fuzz_$f.log || { tail -50 fuzz_$f.log; exit 1; }
             runs=$(grep -o 'stat::number_of_executed_units: *[0-9]*' fuzz_$f.log | grep -o '[0-9]*$')
-            echo "| $f | $runs |" >> "$GITHUB_STEP_SUMMARY"
+            echo "| $f | $runs |" | tee -a "$GITHUB_STEP_SUMMARY"
           done
       - uses: actions/upload-artifact@v7
         if: failure()
