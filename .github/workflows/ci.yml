@@ -1,0 +1,148 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GCC, Release, -Werror
+            cc: gcc
+            cxx: g++
+            build_type: Release
+            sanitize: 'OFF'
+          - name: Clang, ASan + UBSan, -Werror
+            cc: clang
+            cxx: clang++
+            build_type: Debug
+            sanitize: 'ON'
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+          -DCMAKE_C_COMPILER=${{ matrix.cc }} -DCMAKE_CXX_COMPILER=${{ matrix.cxx }}
+          -DNANONOS_WERROR=ON -DNANONOS_SANITIZE=${{ matrix.sanitize }}
+      - run: cmake --build build
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+  cross:
+    name: ${{ matrix.arch }} under QEMU
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [aarch64, s390x]
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build qemu-user g++-${{ matrix.arch }}-linux-gnu
+      - name: Configure
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_TOOLCHAIN_FILE=cmake/${{ matrix.arch }}.cmake
+          -DNANONOS_BUILD_BENCH=OFF -DNANONOS_WERROR=ON
+      - run: cmake --build build
+      - name: Unit tests (emulated)
+        run: ctest --test-dir build --output-on-failure
+      - name: Show target binaries
+        run: file build/nanonosd build/nanonos_tests
+
+  fuzz:
+    name: libFuzzer (60 s per target)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Build fuzzers
+        run: >
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          -DNANONOS_BUILD_FUZZERS=ON -DNANONOS_BUILD_TESTS=OFF -DNANONOS_BUILD_BENCH=OFF
+          && cmake --build build
+      - name: Fuzz
+        run: |
+          echo "| Fuzzer | Executions in 60 s |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          for f in packet pipeline bgp lldp config; do
+            mkdir -p corpus/$f
+            ./build/fuzz_$f -max_total_time=60 -print_final_stats=1 corpus/$f 2> fuzz_$f.log || { tail -50 fuzz_$f.log; exit 1; }
+            runs=$(grep -o 'stat::number_of_executed_units: *[0-9]*' fuzz_$f.log | grep -o '[0-9]*$')
+            echo "| $f | $runs |" >> "$GITHUB_STEP_SUMMARY"
+          done
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: fuzz-crashes
+          path: |
+            crash-*
+            fuzz_*.log
+
+  integration:
+    name: Linux integration (network namespaces)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build iproute2 ethtool iperf3
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNANONOS_BUILD_TESTS=OFF && cmake --build build
+      - name: Layer 2 switching
+        run: sudo -E bash scripts/test_l2.sh
+      - name: Leaf-spine fabric with BGP, ECMP and failover
+        run: sudo -E bash scripts/test_clos.sh
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: integration-logs
+          path: /tmp/nanonos-test/
+
+  frr-interop:
+    name: FRRouting interop
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build iproute2 ethtool frr
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNANONOS_BUILD_TESTS=OFF && cmake --build build
+      - name: eBGP with FRR bgpd over TCP-MD5
+        run: sudo -E bash scripts/test_frr_interop.sh
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: frr-logs
+          path: /tmp/nanonos-test/
+
+  bench:
+    name: Benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNANONOS_BUILD_TESTS=OFF && cmake --build build
+      - name: Run
+        run: |
+          echo "CPU: $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2)" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo >> "$GITHUB_STEP_SUMMARY"
+          ./build/nanonos_bench | tee -a "$GITHUB_STEP_SUMMARY"
