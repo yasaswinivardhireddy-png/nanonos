@@ -22,10 +22,21 @@ void* operator new(std::size_t size) {
   return p;
 }
 void* operator new[](std::size_t size) { return operator new(size); }
+// The nothrow forms must be replaced too (libstdc++ uses them for temporary
+// buffers), or sanitizers see memory from their allocator freed by ours.
+void* operator new(std::size_t size, const std::nothrow_t&) noexcept {
+  if (g_counting.load(std::memory_order_relaxed)) g_allocations.fetch_add(1);
+  return std::malloc(size == 0 ? 1 : size);
+}
+void* operator new[](std::size_t size, const std::nothrow_t& tag) noexcept {
+  return operator new(size, tag);
+}
 void operator delete(void* p) noexcept { std::free(p); }
 void operator delete[](void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+void operator delete(void* p, const std::nothrow_t&) noexcept { std::free(p); }
+void operator delete[](void* p, const std::nothrow_t&) noexcept { std::free(p); }
 
 namespace nanonos {
 namespace {
